@@ -147,5 +147,5 @@ resource linkResources 'Microsoft.Insights/privateLinkScopes/scopedResources@202
 }]
 
 
-
+#
 output linkScopeName string = linkScopeName
