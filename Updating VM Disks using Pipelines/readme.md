@@ -1,0 +1,1 @@
+**Related Article is @ https://www.dckloud.com/2022/11/updating-azure-vm-data-disk-sizes.html**

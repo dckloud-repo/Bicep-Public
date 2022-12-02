@@ -1,0 +1,31 @@
+  - deployment: 'Deploy_VM_Disk_Updates'
+    displayName: 'Deploy_VM_Disk_Updates'
+    environment: Azure-IAC
+    condition: eq('${{ parameters.isVMDiskUpdate }}', 'true')
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - powershell: |
+              $dataDiskDefinitions = scripts\Init-DiskArray.ps1 -vmDisks "$(apAppVmDisks)"
+              Write-Host "##vso[task.setvariable variable=dataDiskDefinitions]$dataDiskDefinitions"
+      
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: ${{ variables.azureServiceConnection }}
+              scriptType: ps
+              scriptLocation: inlineScript
+              inlineScript: |
+                az --version
+                az account set -s ${{ variables.apSubscriptionId }}
+                az vm stop --name $(apAppVmprefix02) --resource-group $(apAppRgName)
+
+                az group deployment create -g $(apAppRgName) `
+                --template-file 'bicep/modules/v2/virtual-machine/virtual-machine-datadisk-update.bicep'
+                --parameters `
+                vmNameSuffix=$(apAppVmprefix02) `
+                dataDiskDefinitions='$(dataDiskDefinitions)'
+
+                az vm start --name $(apAppVmprefix02) --resource-group $(apAppRgName)
