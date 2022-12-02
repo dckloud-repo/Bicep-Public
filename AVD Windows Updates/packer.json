@@ -1,0 +1,110 @@
+{
+  "variables": {
+    "client_id": "",
+    "client_secret": "",
+    "tenant_id": "",
+    "subscription_id": "",
+    "gallery_subscription_id": "",
+    "resource_group_name": "",
+    "build_resource_group_name": "",
+    "gallery_resource_group_name": "",
+    "gallery_name": "",
+    "image_name": "",
+    "source_image_version": "",
+    "target_image_version": "",   
+    "WorkingDirectory": "c:\\users\\packer",
+    "buildartifactsCont": "build",
+    "admin_user": "packer"
+  
+  },
+  "builders": [
+    {
+      "type": "azure-arm",
+      "client_id": "{{user `client_id`}}",
+      "client_secret": "{{user `client_secret`}}",
+      "tenant_id": "{{user `tenant_id`}}",
+      "subscription_id": "{{user `subscription_id`}}",
+      "managed_image_resource_group_name": "{{user `build_resource_group_name`}}",
+      "managed_image_name": "packer-image",
+      "build_resource_group_name": "{{user `build_resource_group_name`}}",
+      "os_type": "Windows",
+      "shared_image_gallery": {
+        "subscription": "{{user `gallery_subscription_id`}}",
+        "resource_group": "{{user `gallery_resource_group_name`}}",
+        "gallery_name": "{{user `gallery_name`}}",
+        "image_name": "{{user `image_name`}}",
+        "image_version": "{{user `source_image_version`}}"
+      },
+      "shared_image_gallery_destination": {
+        "subscription": "{{user `gallery_subscription_id`}}",
+        "resource_group": "{{user `gallery_resource_group_name`}}",
+        "gallery_name": "{{user `gallery_name`}}",
+        "image_name": "{{user `image_name`}}",
+        "image_version": "{{user `target_image_version`}}",
+        "replication_regions": [
+          "australiasoutheast"
+        ],
+        "storage_account_type": "Standard_LRS"
+      },
+      "communicator": "winrm",
+      "winrm_use_ssl": true,
+      "winrm_insecure": true,
+      "winrm_timeout": "60m",
+      "winrm_username": "{{user `admin_user`}}",
+      "vm_size": "Standard_D2_v2",
+      "async_resourcegroup_delete": true
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "windows-restart",
+      "restart_timeout": "15m",
+      "max_retries": 3
+    },
+    {
+      "type": "powershell",
+      "inline": [
+        "$ErrorActionPreference='Stop'",
+        "Write-Host \"[UPDATES]:: Install updates - PASS 1!\"",
+        "Write-Host \"Installing Required Powershell Modules\"",
+        "Get-PackageProvider -name nuget -force",
+        "Install-Module -Name PSWindowsUpdate -Force -Confirm:$false",
+        "$Updates = Get-WindowsUpdate",
+        "Write-Host \"[UPDATES]:: Found $($Updates.count) updates to install - PASS 1!\"",
+        "if( $Updates.count -gt 0 ){ Install-WindowsUpdate -AcceptAll -Install -AutoReboot }"
+      ],
+      "elevated_user": "{{user `admin_user`}}",
+      "elevated_password": "{{.WinRMPassword}}"
+    },
+    {
+      "type": "windows-restart",
+      "restart_timeout": "15m",
+      "max_retries": 3
+    },
+    {
+      "type": "powershell",
+      "pause_before": "3m",
+      "inline": [
+        "$ErrorActionPreference='Stop'",
+        "Write-Host \"[UPDATES]:: Install updates - PASS 2!\"",
+        "$Updates = Get-WindowsUpdate",
+        "Write-Host \"[UPDATES]:: Found $($Updates.count) updates to install - PASS 2!\"",
+        "if( $Updates.count -gt 0 ){ Install-WindowsUpdate -AcceptAll -Install -AutoReboot }"
+      ],
+      "elevated_user": "{{user `admin_user`}}",
+      "elevated_password": "{{.WinRMPassword}}"
+    },
+    {
+      "type": "windows-restart",
+      "restart_timeout": "15m",
+      "max_retries": 3
+    },
+    {
+      "type": "powershell",
+      "inline": [
+        "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /quit",
+        "while($true) { $imageState = Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\State | Select ImageState; if($imageState.ImageState -ne 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') { Write-Output $imageState.ImageState; Start-Sleep -s 10  } else { break } }"
+      ]
+    }
+  ]
+}
